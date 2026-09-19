@@ -1,0 +1,243 @@
+// Prisma schema for AI Crypto Trading Analyzer
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id           String        @id @default(uuid())
+  email        String        @unique
+  passwordHash String
+  createdAt    DateTime      @default(now())
+  updatedAt    DateTime      @updatedAt
+  watchlists   Watchlist[]
+  alerts       Alert[]
+  backtests    Backtest[]
+  settings     UserSettings?
+}
+
+model UserSettings {
+  id               String   @id @default(uuid())
+  userId           String   @unique
+  user             User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  theme            String   @default("dark")
+  defaultTimeframe String   @default("1h")
+  riskPerTradePct  Float    @default(2.0)
+  enableAlertSound Boolean  @default(true)
+  telegramChatId   String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+}
+
+model Watchlist {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol    String
+  addedAt   DateTime @default(now())
+
+  @@unique([userId, symbol])
+  @@index([symbol])
+}
+
+model Market {
+  id              String   @id @default(uuid())
+  symbol          String   @unique
+  baseAsset       String
+  quoteAsset      String
+  lastPrice       Float
+  priceChange24h  Float
+  high24h         Float
+  low24h          Float
+  volume24h       Float
+  quoteVolume24h  Float
+  updatedAt       DateTime @updatedAt
+
+  @@index([symbol])
+}
+
+model Candle {
+  id        String   @id @default(uuid())
+  symbol    String
+  timeframe String
+  timestamp DateTime
+  open      Float
+  high      Float
+  low       Float
+  close     Float
+  volume    Float
+
+  @@unique([symbol, timeframe, timestamp])
+  @@index([symbol, timeframe, timestamp])
+}
+
+model TechnicalIndicator {
+  id        String   @id @default(uuid())
+  symbol    String
+  timeframe String
+  timestamp DateTime
+  data      Json
+
+  @@index([symbol, timeframe, timestamp])
+}
+
+model Signal {
+  id               String        @id @default(uuid())
+  symbol           String
+  timeframe        String
+  timestamp        DateTime      @default(now())
+  signal           String        // LONG, SHORT, WAIT
+  confidence       Float
+  entryMin         Float
+  entryMax         Float
+  stopLoss         Float
+  tp1              Float
+  tp2              Float
+  tp3              Float
+  riskReward       Float
+  technicalScore   Float
+  structureScore   Float
+  volumeScore      Float
+  derivativesScore Float
+  fundamentalScore Float
+  sentimentScore   Float
+  marketConditions String
+  reasons          Json
+  risks            Json
+  result           SignalResult?
+
+  @@index([symbol, timeframe, timestamp])
+}
+
+model SignalResult {
+  id          String   @id @default(uuid())
+  signalId    String   @unique
+  signal      Signal   @relation(fields: [signalId], references: [id], onDelete: Cascade)
+  entryReached Boolean @default(false)
+  slHit       Boolean  @default(false)
+  tp1Hit      Boolean  @default(false)
+  tp2Hit      Boolean  @default(false)
+  tp3Hit      Boolean  @default(false)
+  outcome     String   // WIN, LOSS, PENDING
+  rMultiple   Float    @default(0)
+  durationMin Int      @default(0)
+  closedAt    DateTime?
+}
+
+model FundamentalData {
+  id                  String   @id @default(uuid())
+  symbol              String   @unique
+  name                String
+  marketCap           Float
+  fdv                 Float
+  circulatingSupply   Float
+  totalSupply         Float
+  maxSupply           Float?
+  marketRank          Int
+  ath                 Float
+  atl                 Float
+  score               Float
+  supplyInflationRisk String
+  updatedAt           DateTime @updatedAt
+}
+
+model Sentiment {
+  id             String   @id @default(uuid())
+  fearAndGreed   Int
+  classification String
+  btcDominance   Float
+  ethDominance   Float
+  sentimentScore Float
+  timestamp      DateTime @default(now())
+}
+
+model News {
+  id          String   @id @default(uuid())
+  title       String
+  source      String
+  publishedAt DateTime
+  url         String
+  sentiment   String
+}
+
+model DerivativeData {
+  id            String   @id @default(uuid())
+  symbol        String
+  fundingRate   Float
+  openInterest  Float
+  longShortRatio Float
+  markPrice     Float
+  indexPrice    Float
+  basis         Float
+  timestamp     DateTime @default(now())
+
+  @@index([symbol, timestamp])
+}
+
+model SupportResistance {
+  id        String   @id @default(uuid())
+  symbol    String
+  timeframe String
+  type      String   // support, resistance
+  minPrice  Float
+  maxPrice  Float
+  midPrice  Float
+  strength  String   // weak, medium, strong
+  updatedAt DateTime @updatedAt
+
+  @@index([symbol, timeframe])
+}
+
+model Backtest {
+  id           String   @id @default(uuid())
+  userId       String?
+  user         User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol       String
+  timeframe    String
+  strategy     String
+  winRate      Float
+  profitFactor Float
+  netProfit    Float
+  maxDrawdown  Float
+  sharpeRatio  Float
+  totalTrades  Int
+  createdAt    DateTime @default(now())
+  trades       Trade[]
+
+  @@index([symbol, strategy])
+}
+
+model Trade {
+  id         String   @id @default(uuid())
+  backtestId String
+  backtest   Backtest @relation(fields: [backtestId], references: [id], onDelete: Cascade)
+  type       String   // LONG, SHORT
+  entryPrice Float
+  exitPrice  Float
+  stopLoss   Float
+  takeProfit Float
+  result     String   // WIN, LOSS
+  pnl        Float
+  rMultiple  Float
+  entryTime  DateTime
+  exitTime   DateTime
+}
+
+model Alert {
+  id          String   @id @default(uuid())
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  symbol      String
+  type        String
+  targetValue Float
+  message     String
+  triggered   Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  @@index([symbol, triggered])
+}
